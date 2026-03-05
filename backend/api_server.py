@@ -49,13 +49,23 @@ EMAIL_PASSWORD = "yitvfqimvazjwzwy"
 EMAIL_RECEIVER = "sreoshibhowmik28@gmail.com"
 
 # ---------------------------
-# STATIC LOCATION
+# DYNAMIC LOCATION
 # ---------------------------
-LATITUDE = 22.5599202
-LONGITUDE = 88.4899014
+DEFAULT_LATITUDE = 22.5599202
+DEFAULT_LONGITUDE = 88.4899014
+
+def get_current_location():
+    """Read latest location from location.json"""
+    try:
+        with open("location.json") as f:
+            data = json.load(f)
+        return data.get("latitude", DEFAULT_LATITUDE), data.get("longitude", DEFAULT_LONGITUDE)
+    except:
+        return DEFAULT_LATITUDE, DEFAULT_LONGITUDE
 
 def get_location():
-    return f"https://maps.google.com/?q={LATITUDE},{LONGITUDE}"
+    lat, lng = get_current_location()
+    return f"https://maps.google.com/?q={lat},{lng}"
 
 # ---------------------------
 # IMAGE UPLOAD
@@ -168,6 +178,8 @@ gesture_frame_count = 0  # consecutive frames with gesture detected
 GESTURE_MIN_FRAMES = 3  # require 3 consecutive frames to confirm
 last_gesture_time = 0  # for grace period
 GESTURE_GRACE_PERIOD = 0.5  # seconds — ignore brief drops
+manual_alert_time = 0  # timestamp of manual SOS trigger
+ALERT_DURATION = 60  # seconds to keep alert active
 
 def add_log(message, log_type="info"):
     """Add a log entry (thread-safe)"""
@@ -417,9 +429,23 @@ def location():
         return jsonify(data)
     except:
         return jsonify({
-            "latitude": 22.5599202,
-            "longitude": 88.4899014
+            "latitude": DEFAULT_LATITUDE,
+            "longitude": DEFAULT_LONGITUDE
         })
+
+
+@app.route("/update_location", methods=["POST"])
+def update_location():
+    """Receive GPS coordinates from the browser and save to location.json"""
+    data = request.json
+    if data and "latitude" in data and "longitude" in data:
+        with open("location.json", "w") as f:
+            json.dump({
+                "latitude": data["latitude"],
+                "longitude": data["longitude"]
+            }, f)
+        return jsonify({"status": "location_updated"})
+    return jsonify({"error": "Missing latitude/longitude"}), 400
 
 
 # ---------------------------
@@ -444,14 +470,21 @@ def status():
     is_active_alert = False
     last_modified = None
 
+    # Check file-based alert (from AI gesture detection)
     if has_evidence:
         try:
             mod_time = os.path.getmtime("latest.jpg")
             last_modified = datetime.datetime.fromtimestamp(mod_time).strftime("%Y-%m-%d %H:%M:%S")
-            if (datetime.datetime.now().timestamp() - mod_time) < 60:
+            if (datetime.datetime.now().timestamp() - mod_time) < ALERT_DURATION:
                 is_active_alert = True
         except:
             pass
+
+    # Check in-memory alert (from manual SOS)
+    if manual_alert_time > 0 and (time.time() - manual_alert_time) < ALERT_DURATION:
+        is_active_alert = True
+        if last_modified is None:
+            last_modified = datetime.datetime.fromtimestamp(manual_alert_time).strftime("%Y-%m-%d %H:%M:%S")
 
     if is_active_alert:
         threat_level = 2
@@ -501,7 +534,10 @@ frame_lock = threading.Lock()
 @app.route("/manual_sos", methods=["POST"])
 def manual_sos():
     """Manual SOS button - captures current frame and triggers all alerts"""
-    global sos_triggered, last_sos_time
+    global sos_triggered, last_sos_time, manual_alert_time
+
+    # Set the alert flag IMMEDIATELY so /status returns is_alert=true
+    manual_alert_time = time.time()
 
     add_log("🚨 MANUAL SOS ACTIVATED", "alert")
 

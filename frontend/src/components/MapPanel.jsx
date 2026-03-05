@@ -18,8 +18,8 @@ export default function MapPanel() {
         }
 
         fetchLocation()
-        // Refresh location every 10 seconds
-        const interval = setInterval(fetchLocation, 10000)
+        // Refresh location every 5 seconds for real-time tracking
+        const interval = setInterval(fetchLocation, 5000)
         return () => clearInterval(interval)
     }, [])
 

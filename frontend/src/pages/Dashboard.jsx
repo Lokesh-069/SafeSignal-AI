@@ -5,6 +5,8 @@ import EvidencePanel from '../components/EvidencePanel'
 import AlertPanel from '../components/AlertPanel'
 import SOSButton from '../components/SOSButton'
 import EventLogs from '../components/EventLogs'
+import AlertOverlay from '../components/AlertOverlay'
+import LocationTracker from '../components/LocationTracker'
 
 export default function Dashboard() {
     return (
@@ -13,6 +15,12 @@ export default function Dashboard() {
             display: 'flex',
             flexDirection: 'column',
         }}>
+            {/* Emergency Alert Overlay — red blink + siren */}
+            <AlertOverlay />
+
+            {/* Real-time GPS tracking (sends to backend) */}
+            <LocationTracker />
+
             {/* Header */}
             <Header />
 
