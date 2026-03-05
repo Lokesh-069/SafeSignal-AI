@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { API_URL } from '../config'
 
 export default function SOSButton() {
     const [triggered, setTriggered] = useState(false)
@@ -22,7 +23,7 @@ export default function SOSButton() {
             setConfirmStep(2)
             setLoading(true)
 
-            fetch("http://127.0.0.1:5001/manual_sos", { method: "POST" })
+            fetch(`${API_URL}/manual_sos`, { method: "POST" })
                 .then(res => res.json())
                 .then(() => {
                     setTriggered(true)

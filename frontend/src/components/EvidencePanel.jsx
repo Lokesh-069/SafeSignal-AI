@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react'
+import { API_URL } from '../config'
 
 export default function EvidencePanel() {
-    const [img, setImg] = useState("http://127.0.0.1:5001/latest_evidence")
+    const [img, setImg] = useState(`${API_URL}/latest_evidence`)
     const [hasEvidence, setHasEvidence] = useState(false)
 
     // Auto-refresh every 3 seconds
     useEffect(() => {
         const interval = setInterval(() => {
-            setImg(`http://127.0.0.1:5001/latest_evidence?t=${Date.now()}`)
+            setImg(`${API_URL}/latest_evidence?t=${Date.now()}`)
         }, 3000)
         return () => clearInterval(interval)
     }, [])

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { API_URL } from '../config'
 
 /**
  * Full-screen emergency alert overlay.
@@ -16,7 +17,7 @@ export default function AlertOverlay() {
     // Poll /status
     useEffect(() => {
         const checkStatus = () => {
-            fetch("http://127.0.0.1:5001/status")
+            fetch(`${API_URL}/status`)
                 .then(res => res.json())
                 .then(data => {
                     const alertActive = data.is_alert === true

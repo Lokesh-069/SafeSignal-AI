@@ -1,7 +1,5 @@
 from flask import Flask, jsonify, send_file, Response, request
 from flask_cors import CORS
-import cv2
-import mediapipe as mp
 import json
 import os
 import time
@@ -18,8 +16,8 @@ CORS(app)
 # ---------------------------
 from twilio.rest import Client
 
-account_sid = "ACd76b6305e68a1ac820636ff54f082654"
-auth_token = "a153e6991d50599ec5ded7169c465920"
+account_sid = os.environ.get("TWILIO_SID", "ACd76b6305e68a1ac820636ff54f082654")
+auth_token = os.environ.get("TWILIO_TOKEN", "a153e6991d50599ec5ded7169c465920")
 
 twilio_client = Client(account_sid, auth_token)
 
@@ -29,6 +27,9 @@ TARGET_SMS_NUMBER = "+917679341340"
 WHATSAPP_SANDBOX_NUMBER = "whatsapp:+14155238886"
 TARGET_WHATSAPP_NUMBER = "whatsapp:+917679341340"
 
+TWILIO_CALL_NUMBER = "+13204336834"
+TARGET_CALL_NUMBER = "+917679341340"
+
 # ---------------------------
 # CLOUDINARY SETUP
 # ---------------------------
@@ -36,17 +37,17 @@ import cloudinary
 import cloudinary.uploader
 
 cloudinary.config(
-    cloud_name="dcil9emrr",
-    api_key="264151859645138",
-    api_secret="GdeAAcPy_tqQbLEBUNBpiIRJuAQ"
+    cloud_name=os.environ.get("CLOUDINARY_CLOUD", "dfhzpgyep"),
+    api_key=os.environ.get("CLOUDINARY_KEY", "594898555647737"),
+    api_secret=os.environ.get("CLOUDINARY_SECRET", "1YBf7OIFNAv8gFx-wW2x5IhKk_c"),
 )
 
 # ---------------------------
 # EMAIL SETUP
 # ---------------------------
-EMAIL_SENDER = "lokeshhazra22@gmail.com"
-EMAIL_PASSWORD = "yitvfqimvazjwzwy"
-EMAIL_RECEIVER = "sreoshibhowmik28@gmail.com"
+EMAIL_SENDER = os.environ.get("EMAIL_SENDER", "skynetincoming@gmail.com")
+EMAIL_PASSWORD = os.environ.get("EMAIL_PASSWORD", "yitvfqimvazjwzwy")
+EMAIL_RECEIVER = os.environ.get("EMAIL_RECEIVER", "sreoshibhowmik28@gmail.com")
 
 # ---------------------------
 # DYNAMIC LOCATION
@@ -70,9 +71,9 @@ def get_location():
 # ---------------------------
 # IMAGE UPLOAD
 # ---------------------------
+
 def upload_image(image_path):
-    response = cloudinary.uploader.upload(image_path)
-    return response["secure_url"]
+    return cloudinary.uploader.upload(image_path)["secure_url"]
 
 # ---------------------------
 # ALERT FUNCTIONS
@@ -80,83 +81,61 @@ def upload_image(image_path):
 
 def send_sms(image_url, maps_link):
     try:
-        twilio_client.messages.create(
-            body=f"""
-🚨 EMERGENCY ALERT 🚨
-Robbery suspected!
-
-📍 Location
-{maps_link}
-
-📸 Evidence
-{image_url}
-""",
+        message = twilio_client.messages.create(
+            body=f"🚨 SafeSignal ALERT!\n\n⚠ SOS Detected.\n📍 Location: {maps_link}\n📷 Evidence: {image_url}",
             from_=TWILIO_SMS_NUMBER,
             to=TARGET_SMS_NUMBER
         )
-        add_log("SMS alert sent successfully", "success")
+        add_log(f"SMS sent: {message.sid[:15]}...", "success")
     except Exception as e:
         add_log(f"SMS failed: {str(e)[:50]}", "alert")
 
 
 def send_whatsapp(image_url, maps_link):
     try:
-        twilio_client.messages.create(
-            body=f"""
-🚨 *EMERGENCY ALERT*
-
-Robbery suspected!
-
-📍 Location
-{maps_link}
-""",
+        message = twilio_client.messages.create(
+            body=f"🚨 *SafeSignal ALERT!*\n\n⚠ SOS Detected.\n📍 Location: {maps_link}\n📷 Evidence: {image_url}",
             from_=WHATSAPP_SANDBOX_NUMBER,
-            to=TARGET_WHATSAPP_NUMBER,
-            media_url=[image_url]
+            to=TARGET_WHATSAPP_NUMBER
         )
-        add_log("WhatsApp alert sent successfully", "success")
+        add_log(f"WhatsApp sent: {message.sid[:15]}...", "success")
     except Exception as e:
         add_log(f"WhatsApp failed: {str(e)[:50]}", "alert")
 
 
 def make_call():
     try:
-        twilio_client.calls.create(
-            twiml="""
-<Response>
-<Say voice="alice">
-Emergency alert. Possible robbery detected.
-Please check your phone for location and evidence.
-</Say>
-</Response>
-""",
-            to=TARGET_SMS_NUMBER,
-            from_=TWILIO_SMS_NUMBER
+        call = twilio_client.calls.create(
+            twiml="<Response><Say voice='Polly.Joanna'>Alert! This is SafeSignal emergency system. An SOS signal has been detected at the monitored location. Immediate attention is required. Please respond immediately.</Say><Pause length='2'/><Say voice='Polly.Joanna'>Repeating: SOS alert detected. Please check your SafeSignal dashboard for evidence and location details.</Say></Response>",
+            from_=TWILIO_CALL_NUMBER,
+            to=TARGET_CALL_NUMBER
         )
-        add_log("Emergency phone call initiated", "success")
+        add_log(f"Call initiated: {call.sid[:15]}...", "success")
     except Exception as e:
-        add_log(f"Phone call failed: {str(e)[:50]}", "alert")
+        add_log(f"Call failed: {str(e)[:50]}", "alert")
 
 
 def send_email(image_url, maps_link):
     try:
         msg = EmailMessage()
-        msg['Subject'] = "🚨 EMERGENCY ROBBERY ALERT"
-        msg['From'] = EMAIL_SENDER
-        msg['To'] = EMAIL_RECEIVER
+        msg["Subject"] = "🚨 SafeSignal SOS ALERT"
+        msg["From"] = EMAIL_SENDER
+        msg["To"] = EMAIL_RECEIVER
         msg.set_content(f"""
-Emergency robbery detected.
+🚨 SafeSignal Emergency Alert
 
-Location:
-{maps_link}
+⚠ An SOS signal has been detected.
 
-Evidence Image:
-{image_url}
-""")
-        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
+📍 Location: {maps_link}
+📷 Evidence: {image_url}
+
+This is an automated alert from SafeSignal AI Security System.
+        """)
+
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
             smtp.login(EMAIL_SENDER, EMAIL_PASSWORD)
             smtp.send_message(msg)
-        add_log("Email alert sent successfully", "success")
+        add_log("Email sent successfully", "success")
     except Exception as e:
         add_log(f"Email failed: {str(e)[:50]}", "alert")
 
@@ -169,17 +148,11 @@ event_logs = []
 log_lock = threading.Lock()
 
 # SOS detection state
-gesture_start_time = None
-HOLD_DURATION = 5
 sos_triggered = False
 last_sos_time = 0
-SOS_COOLDOWN = 30  # seconds between SOS triggers
-gesture_frame_count = 0  # consecutive frames with gesture detected
-GESTURE_MIN_FRAMES = 3  # require 3 consecutive frames to confirm
-last_gesture_time = 0  # for grace period
-GESTURE_GRACE_PERIOD = 0.5  # seconds — ignore brief drops
-manual_alert_time = 0  # timestamp of manual SOS trigger
-ALERT_DURATION = 60  # seconds to keep alert active
+SOS_COOLDOWN = 30
+manual_alert_time = 0
+ALERT_DURATION = 60
 
 def add_log(message, log_type="info"):
     """Add a log entry (thread-safe)"""
@@ -187,46 +160,39 @@ def add_log(message, log_type="info"):
         event_logs.append({
             "time": datetime.datetime.now().strftime("%H:%M:%S"),
             "message": message,
-            "type": log_type
+            "type": log_type,
         })
         if len(event_logs) > 100:
             event_logs.pop(0)
-    print(f"[{log_type.upper()}] {message}")
 
 # Initial logs
 add_log("System initialized", "info")
-add_log("Loading AI detection models...", "info")
+add_log("SafeSignal backend ready", "success")
+add_log("Waiting for browser connections...", "info")
 
 
 # ---------------------------
-# TRIGGER FULL ALERT
+# TRIGGER FULL ALERT (called by browser or manual SOS)
 # ---------------------------
 
-def trigger_alert(frame):
+def trigger_full_alert(image_path=None):
     """Save evidence, upload, and send all alerts"""
-    global last_sos_time
-
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"sos_{timestamp}.jpg"
-
-    # Save evidence image
-    cv2.imwrite("latest.jpg", frame)
-    cv2.imwrite(filename, frame)
-
-    add_log("🚨 SOS GESTURE DETECTED — EMERGENCY TRIGGERED", "alert")
-    add_log("Evidence frame captured and saved", "warning")
+    global sos_triggered, last_sos_time, manual_alert_time
 
     last_sos_time = time.time()
+    manual_alert_time = time.time()
+    sos_triggered = True
 
-    # Run alerts in background thread to not block video feed
     def send_all_alerts():
-        add_log("Uploading evidence to cloud...", "info")
-        try:
-            image_url = upload_image(filename)
-            add_log("Evidence uploaded to Cloudinary", "success")
-        except Exception as e:
-            add_log(f"Upload failed: {str(e)[:50]}", "alert")
-            return
+        image_url = "No image available"
+
+        if image_path and os.path.exists(image_path):
+            add_log("Uploading evidence to cloud...", "info")
+            try:
+                image_url = upload_image(image_path)
+                add_log("Evidence uploaded to Cloudinary", "success")
+            except Exception as e:
+                add_log(f"Upload failed: {str(e)[:50]}", "alert")
 
         maps_link = get_location()
 
@@ -245,176 +211,6 @@ def trigger_alert(frame):
         add_log("All alert channels notified ✅", "success")
 
     threading.Thread(target=send_all_alerts, daemon=True).start()
-
-
-# ---------------------------
-# MEDIAPIPE POSE SETUP
-# ---------------------------
-
-mp_pose = mp.solutions.pose
-pose = mp_pose.Pose(
-    min_detection_confidence=0.5,
-    min_tracking_confidence=0.5
-)
-mp_drawing = mp.solutions.drawing_utils
-
-add_log("MediaPipe Pose model loaded", "success")
-add_log("Camera initializing...", "info")
-
-
-# ---------------------------
-# CAMERA STREAM WITH SOS DETECTION
-# ---------------------------
-
-def generate_frames():
-    global gesture_start_time, sos_triggered, last_sos_time, gesture_frame_count, last_gesture_time
-
-    cap = cv2.VideoCapture(0)
-
-    if not cap.isOpened():
-        add_log("Camera not detected!", "alert")
-        print("Camera not detected")
-        return
-
-    add_log("Camera stream initialized", "success")
-    add_log("AI gesture recognition active", "success")
-    add_log("Alert channels: SMS, WhatsApp, Email, Phone", "info")
-    add_log("System ready — AI monitoring active", "success")
-
-    while True:
-        success, frame = cap.read()
-
-        if not success:
-            break
-
-        # --- POSE DETECTION ---
-        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        results = pose.process(rgb)
-
-        gesture_detected = False
-
-        if results.pose_landmarks:
-            # Draw pose landmarks on the frame
-            mp_drawing.draw_landmarks(
-                frame,
-                results.pose_landmarks,
-                mp_pose.POSE_CONNECTIONS,
-                mp_drawing.DrawingSpec(color=(0, 255, 255), thickness=2, circle_radius=2),
-                mp_drawing.DrawingSpec(color=(0, 240, 255), thickness=1, circle_radius=1),
-            )
-
-            lm = results.pose_landmarks.landmark
-
-            left_wrist = lm[mp_pose.PoseLandmark.LEFT_WRIST]
-            right_wrist = lm[mp_pose.PoseLandmark.RIGHT_WRIST]
-            left_elbow = lm[mp_pose.PoseLandmark.LEFT_ELBOW]
-            right_elbow = lm[mp_pose.PoseLandmark.RIGHT_ELBOW]
-            left_shoulder = lm[mp_pose.PoseLandmark.LEFT_SHOULDER]
-            right_shoulder = lm[mp_pose.PoseLandmark.RIGHT_SHOULDER]
-
-            # --- SOS GESTURE: Crossed arms raised above chest ---
-            # Normal: left_wrist.x > right_wrist.x
-            # Crossed: left_wrist.x < right_wrist.x (wrists swap sides)
-
-            # 1) Wrists must CROSS sides
-            wrists_crossed = left_wrist.x < right_wrist.x
-
-            # 2) Both wrists ABOVE shoulders (relaxed threshold)
-            wrists_raised = (
-                left_wrist.y < left_shoulder.y and
-                right_wrist.y < right_shoulder.y
-            )
-
-            # 3) Wrists at similar height (relaxed)
-            wrists_close_vertically = abs(left_wrist.y - right_wrist.y) < 0.20
-
-            # 4) Wrists near body center (relaxed)
-            body_center_x = (left_shoulder.x + right_shoulder.x) / 2
-            wrists_near_center = (
-                abs(left_wrist.x - body_center_x) < 0.35 and
-                abs(right_wrist.x - body_center_x) < 0.35
-            )
-
-            raw_detection = (
-                wrists_crossed and
-                wrists_raised and
-                wrists_close_vertically and
-                wrists_near_center
-            )
-
-            if raw_detection:
-                gesture_frame_count += 1
-                last_gesture_time = time.time()
-            else:
-                # Grace period: don't reset immediately on a single dropped frame
-                if time.time() - last_gesture_time > GESTURE_GRACE_PERIOD:
-                    gesture_frame_count = 0
-
-            # Confirmed after enough consecutive frames
-            if gesture_frame_count >= GESTURE_MIN_FRAMES:
-                gesture_detected = True
-                cv2.putText(frame, "SOS GESTURE DETECTED",
-                            (50, 50), cv2.FONT_HERSHEY_SIMPLEX,
-                            1, (0, 0, 255), 2)
-            elif raw_detection:
-                # Show early feedback
-                cv2.putText(frame, "HOLD STEADY...",
-                            (50, 50), cv2.FONT_HERSHEY_SIMPLEX,
-                            0.7, (0, 255, 255), 2)
-            elif wrists_raised:
-                cv2.putText(frame, "CROSS ARMS TO SIGNAL SOS",
-                            (50, 50), cv2.FONT_HERSHEY_SIMPLEX,
-                            0.6, (0, 200, 200), 1)
-
-        # --- HOLD TIMER ---
-        current_time = time.time()
-
-        # Reset sos_triggered after cooldown
-        if sos_triggered and (current_time - last_sos_time) > SOS_COOLDOWN:
-            sos_triggered = False
-            add_log("SOS cooldown reset — monitoring resumed", "info")
-
-        if gesture_detected:
-            if gesture_start_time is None:
-                gesture_start_time = current_time
-                add_log("SOS gesture confirmed — hold for 5 seconds", "warning")
-
-            elapsed = current_time - gesture_start_time
-            remaining = int(HOLD_DURATION - elapsed)
-
-            if remaining > 0:
-                cv2.putText(frame, f"Hold {remaining} sec",
-                            (50, 90), cv2.FONT_HERSHEY_SIMPLEX,
-                            1, (255, 255, 0), 2)
-
-                # Draw progress bar
-                bar_width = int((elapsed / HOLD_DURATION) * 300)
-                cv2.rectangle(frame, (50, 110), (50 + bar_width, 125), (0, 255, 255), -1)
-                cv2.rectangle(frame, (50, 110), (350, 125), (0, 255, 255), 1)
-
-            if elapsed >= HOLD_DURATION and not sos_triggered:
-                print("🚨 Emergency Triggered")
-                trigger_alert(frame)
-                sos_triggered = True
-
-        else:
-            if gesture_start_time is not None:
-                gesture_start_time = None
-
-        # --- ENCODE AND YIELD ---
-        ret, buffer = cv2.imencode('.jpg', frame)
-        frame_bytes = buffer.tobytes()
-
-        yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-
-
-@app.route("/video_feed")
-def video_feed():
-    return Response(
-        generate_frames(),
-        mimetype='multipart/x-mixed-replace; boundary=frame'
-    )
 
 
 # ---------------------------
@@ -454,10 +250,31 @@ def update_location():
 
 @app.route("/latest_evidence")
 def latest_evidence():
-    image_path = "latest.jpg"
-    if os.path.exists(image_path):
-        return send_file(image_path, mimetype="image/jpeg")
-    return jsonify({"error": "No evidence yet"}), 404
+    if os.path.exists("latest.jpg"):
+        return send_file("latest.jpg", mimetype="image/jpeg")
+    return jsonify({"error": "No evidence available"}), 404
+
+
+# ---------------------------
+# UPLOAD EVIDENCE (from browser)
+# ---------------------------
+
+@app.route("/upload_evidence", methods=["POST"])
+def upload_evidence():
+    """Receive evidence image from browser camera capture"""
+    if "evidence" not in request.files:
+        return jsonify({"error": "No evidence file"}), 400
+
+    file = request.files["evidence"]
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"sos_{timestamp}.jpg"
+
+    file.save("latest.jpg")
+    file.seek(0)
+    file.save(filename)
+
+    add_log("Evidence received from browser", "success")
+    return jsonify({"status": "evidence_uploaded", "filename": filename})
 
 
 # ---------------------------
@@ -470,7 +287,7 @@ def status():
     is_active_alert = False
     last_modified = None
 
-    # Check file-based alert (from AI gesture detection)
+    # Check file-based alert
     if has_evidence:
         try:
             mod_time = os.path.getmtime("latest.jpg")
@@ -480,7 +297,7 @@ def status():
         except:
             pass
 
-    # Check in-memory alert (from manual SOS)
+    # Check in-memory alert (from manual SOS or trigger_alert)
     if manual_alert_time > 0 and (time.time() - manual_alert_time) < ALERT_DURATION:
         is_active_alert = True
         if last_modified is None:
@@ -513,103 +330,29 @@ def logs():
 
 
 # ---------------------------
-# TRIGGER ALERT ENDPOINT (from gesture detection)
+# TRIGGER ALERT ENDPOINT (from browser pose detection)
 # ---------------------------
 
 @app.route("/trigger_alert", methods=["POST"])
 def trigger_alert_endpoint():
-    add_log("🚨 SOS GESTURE DETECTED", "alert")
-    add_log("All alert channels notified", "success")
-    return jsonify({"status": "alert_registered"})
+    add_log("🚨 SOS GESTURE DETECTED (browser)", "alert")
+    trigger_full_alert("latest.jpg")
+    return jsonify({"status": "alert_triggered"})
 
 
 # ---------------------------
 # MANUAL SOS ENDPOINT
 # ---------------------------
 
-# Shared camera frame for manual SOS
-latest_frame = None
-frame_lock = threading.Lock()
-
 @app.route("/manual_sos", methods=["POST"])
 def manual_sos():
-    """Manual SOS button - captures current frame and triggers all alerts"""
-    global sos_triggered, last_sos_time, manual_alert_time
+    """Manual SOS button — triggers all alerts"""
+    global manual_alert_time
 
-    # Set the alert flag IMMEDIATELY so /status returns is_alert=true
     manual_alert_time = time.time()
-
     add_log("🚨 MANUAL SOS ACTIVATED", "alert")
-
-    # Try to capture a frame from the camera
-    frame_captured = False
-    try:
-        cap = cv2.VideoCapture(0)
-        if cap.isOpened():
-            ret, frame = cap.read()
-            if ret:
-                timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                filename = f"manual_sos_{timestamp}.jpg"
-                cv2.imwrite("latest.jpg", frame)
-                cv2.imwrite(filename, frame)
-                frame_captured = True
-                add_log("Evidence frame captured", "warning")
-
-                last_sos_time = time.time()
-                sos_triggered = True
-
-                # Send alerts in background
-                def send_manual_alerts():
-                    add_log("Uploading evidence to cloud...", "info")
-                    try:
-                        image_url = upload_image(filename)
-                        add_log("Evidence uploaded to Cloudinary", "success")
-                    except Exception as e:
-                        add_log(f"Upload failed: {str(e)[:50]}", "alert")
-                        return
-
-                    maps_link = get_location()
-
-                    add_log("Sending SMS alert...", "warning")
-                    send_sms(image_url, maps_link)
-
-                    add_log("Sending WhatsApp alert...", "warning")
-                    send_whatsapp(image_url, maps_link)
-
-                    add_log("Making emergency phone call...", "warning")
-                    make_call()
-
-                    add_log("Sending email alert...", "warning")
-                    send_email(image_url, maps_link)
-
-                    add_log("All alert channels notified ✅", "success")
-
-                threading.Thread(target=send_manual_alerts, daemon=True).start()
-
-            cap.release()
-    except Exception as e:
-        add_log(f"Camera capture failed: {str(e)[:50]}", "alert")
-
-    if not frame_captured:
-        add_log("No camera frame available — sending alerts without evidence", "warning")
-        last_sos_time = time.time()
-        sos_triggered = True
-
-        def send_no_frame_alerts():
-            maps_link = get_location()
-            add_log("Sending SMS alert...", "warning")
-            send_sms("No image available", maps_link)
-            add_log("Sending WhatsApp alert...", "warning")
-            send_whatsapp("No image available", maps_link)
-            add_log("Making emergency phone call...", "warning")
-            make_call()
-            add_log("Sending email alert...", "warning")
-            send_email("No image available", maps_link)
-            add_log("All alert channels notified ✅", "success")
-
-        threading.Thread(target=send_no_frame_alerts, daemon=True).start()
-
-    return jsonify({"status": "manual_sos_triggered", "evidence": frame_captured})
+    trigger_full_alert("latest.jpg")
+    return jsonify({"status": "manual_sos_triggered"})
 
 
 # ---------------------------
@@ -618,9 +361,7 @@ def manual_sos():
 
 @app.route("/")
 def home():
-    return jsonify({
-        "status": "SafeSignal Backend Running"
-    })
+    return jsonify("SafeSignal Backend Running")
 
 
 # ---------------------------
@@ -628,19 +369,6 @@ def home():
 # ---------------------------
 
 if __name__ == "__main__":
-    print("=" * 50)
-    print("  SafeSignal API Server")
-    print("  AI-Powered Emergency Detection")
-    print("=" * 50)
-    print(f"  Camera Feed:    http://127.0.0.1:5001/video_feed")
-    print(f"  Location API:   http://127.0.0.1:5001/location")
-    print(f"  Evidence API:   http://127.0.0.1:5001/latest_evidence")
-    print(f"  Status API:     http://127.0.0.1:5001/status")
-    print(f"  Logs API:       http://127.0.0.1:5001/logs")
-    print("=" * 50)
-
-    app.run(
-        host="0.0.0.0",
-        port=5001,
-        debug=False  # Must be False to avoid duplicate camera captures
-    )
+    port = int(os.environ.get("PORT", 5001))
+    add_log(f"Server starting on port {port}", "info")
+    app.run(host="0.0.0.0", port=port, debug=False)

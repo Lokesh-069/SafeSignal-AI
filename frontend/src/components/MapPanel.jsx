@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { API_URL } from '../config'
 
 export default function MapPanel() {
     const mapRef = useRef(null)
@@ -11,7 +12,7 @@ export default function MapPanel() {
     // Fetch location from Flask backend
     useEffect(() => {
         const fetchLocation = () => {
-            fetch("http://127.0.0.1:5001/location")
+            fetch(`${API_URL}/location`)
                 .then(res => res.json())
                 .then(data => setLocation(data))
                 .catch(() => setLocation({ latitude: 22.5599202, longitude: 88.4899014 }))

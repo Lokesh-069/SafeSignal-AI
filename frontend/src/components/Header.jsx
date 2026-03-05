@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { API_URL } from '../config'
 
 export default function Header() {
     const [time, setTime] = useState(new Date())
@@ -12,7 +13,7 @@ export default function Header() {
     // Check backend health every 5 seconds
     useEffect(() => {
         const checkBackend = () => {
-            fetch("http://127.0.0.1:5001/")
+            fetch(`${API_URL}/`)
                 .then(res => res.json())
                 .then(() => setBackendActive(true))
                 .catch(() => setBackendActive(false))

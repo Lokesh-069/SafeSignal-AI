@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { API_URL } from '../config'
 
 /**
  * Invisible component that uses the browser's Geolocation API
@@ -21,7 +22,7 @@ export default function LocationTracker() {
             setTracking(true)
             setError(null)
 
-            fetch("http://127.0.0.1:5001/update_location", {
+            fetch(`${API_URL}/update_location`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ latitude, longitude })
