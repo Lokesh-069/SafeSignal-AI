@@ -11,7 +11,7 @@ export default function SignIn() {
         e.preventDefault()
         setLoading(true)
         // Demo — fake delay then navigate to dashboard
-        setTimeout(() => navigate('/dashboard'), 1500)
+        setTimeout(() => navigate('/setup'), 1500)
     }
 
     return (
