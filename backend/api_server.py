@@ -220,29 +220,45 @@ def trigger_alert(frame):
 
     # Run alerts in background thread to not block video feed
     def send_all_alerts():
-        add_log("Uploading evidence to cloud...", "info")
         try:
+            add_log("Uploading evidence to cloud...", "info")
             image_url = upload_image(filename)
-            add_log("Evidence uploaded to Cloudinary", "success")
+            if image_url:
+                add_log("Evidence uploaded to Cloudinary", "success")
+            else:
+                image_url = "Upload failed — no image available"
+                add_log("Upload failed, continuing with alerts...", "alert")
+
+            maps_link = get_location()
+
+            try:
+                add_log("Sending SMS alert...", "warning")
+                send_sms(image_url, maps_link)
+            except Exception as e:
+                add_log(f"SMS error: {str(e)[:50]}", "alert")
+
+            try:
+                add_log("Sending WhatsApp alert...", "warning")
+                send_whatsapp(image_url, maps_link)
+            except Exception as e:
+                add_log(f"WhatsApp error: {str(e)[:50]}", "alert")
+
+            try:
+                add_log("Making emergency phone call...", "warning")
+                make_call()
+            except Exception as e:
+                add_log(f"Call error: {str(e)[:50]}", "alert")
+
+            try:
+                add_log("Sending email alert...", "warning")
+                send_email(image_url, maps_link)
+            except Exception as e:
+                add_log(f"Email error: {str(e)[:50]}", "alert")
+
+            add_log("All alert channels processed ✅", "success")
         except Exception as e:
-            add_log(f"Upload failed: {str(e)[:50]}", "alert")
-            return
-
-        maps_link = get_location()
-
-        add_log("Sending SMS alert...", "warning")
-        send_sms(image_url, maps_link)
-
-        add_log("Sending WhatsApp alert...", "warning")
-        send_whatsapp(image_url, maps_link)
-
-        add_log("Making emergency phone call...", "warning")
-        make_call()
-
-        add_log("Sending email alert...", "warning")
-        send_email(image_url, maps_link)
-
-        add_log("All alert channels notified ✅", "success")
+            add_log(f"Alert system error: {str(e)[:80]}", "alert")
+            print(f"Alert system error: {e}")
 
     threading.Thread(target=send_all_alerts, daemon=True).start()
 
@@ -282,131 +298,135 @@ def generate_frames():
     add_log("System ready — AI monitoring active", "success")
 
     while True:
-        success, frame = cap.read()
+        try:
+            success, frame = cap.read()
 
-        if not success:
-            break
+            if not success:
+                add_log("Camera feed lost — reconnecting...", "alert")
+                cap.release()
+                time.sleep(1)
+                cap = cv2.VideoCapture(0)
+                continue
 
-        # --- POSE DETECTION ---
-        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        results = pose.process(rgb)
+            # --- POSE DETECTION ---
+            gesture_detected = False
 
-        gesture_detected = False
+            try:
+                rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                results = pose.process(rgb)
 
-        if results.pose_landmarks:
-            # Draw pose landmarks on the frame
-            mp_drawing.draw_landmarks(
-                frame,
-                results.pose_landmarks,
-                mp_pose.POSE_CONNECTIONS,
-                mp_drawing.DrawingSpec(color=(0, 255, 255), thickness=2, circle_radius=2),
-                mp_drawing.DrawingSpec(color=(0, 240, 255), thickness=1, circle_radius=1),
-            )
+                if results.pose_landmarks:
+                    # Draw pose landmarks on the frame
+                    mp_drawing.draw_landmarks(
+                        frame,
+                        results.pose_landmarks,
+                        mp_pose.POSE_CONNECTIONS,
+                        mp_drawing.DrawingSpec(color=(0, 255, 255), thickness=2, circle_radius=2),
+                        mp_drawing.DrawingSpec(color=(0, 240, 255), thickness=1, circle_radius=1),
+                    )
 
-            lm = results.pose_landmarks.landmark
+                    lm = results.pose_landmarks.landmark
 
-            left_wrist = lm[mp_pose.PoseLandmark.LEFT_WRIST]
-            right_wrist = lm[mp_pose.PoseLandmark.RIGHT_WRIST]
-            left_elbow = lm[mp_pose.PoseLandmark.LEFT_ELBOW]
-            right_elbow = lm[mp_pose.PoseLandmark.RIGHT_ELBOW]
-            left_shoulder = lm[mp_pose.PoseLandmark.LEFT_SHOULDER]
-            right_shoulder = lm[mp_pose.PoseLandmark.RIGHT_SHOULDER]
+                    left_wrist = lm[mp_pose.PoseLandmark.LEFT_WRIST]
+                    right_wrist = lm[mp_pose.PoseLandmark.RIGHT_WRIST]
+                    left_elbow = lm[mp_pose.PoseLandmark.LEFT_ELBOW]
+                    right_elbow = lm[mp_pose.PoseLandmark.RIGHT_ELBOW]
+                    left_shoulder = lm[mp_pose.PoseLandmark.LEFT_SHOULDER]
+                    right_shoulder = lm[mp_pose.PoseLandmark.RIGHT_SHOULDER]
 
-            # --- SOS GESTURE: Crossed arms raised above chest ---
-            # Normal: left_wrist.x > right_wrist.x
-            # Crossed: left_wrist.x < right_wrist.x (wrists swap sides)
+                    wrists_crossed = left_wrist.x < right_wrist.x
+                    wrists_raised = (
+                        left_wrist.y < left_shoulder.y and
+                        right_wrist.y < right_shoulder.y
+                    )
+                    wrists_close_vertically = abs(left_wrist.y - right_wrist.y) < 0.20
+                    body_center_x = (left_shoulder.x + right_shoulder.x) / 2
+                    wrists_near_center = (
+                        abs(left_wrist.x - body_center_x) < 0.35 and
+                        abs(right_wrist.x - body_center_x) < 0.35
+                    )
 
-            # 1) Wrists must CROSS sides
-            wrists_crossed = left_wrist.x < right_wrist.x
+                    raw_detection = (
+                        wrists_crossed and
+                        wrists_raised and
+                        wrists_close_vertically and
+                        wrists_near_center
+                    )
 
-            # 2) Both wrists ABOVE shoulders (relaxed threshold)
-            wrists_raised = (
-                left_wrist.y < left_shoulder.y and
-                right_wrist.y < right_shoulder.y
-            )
+                    if raw_detection:
+                        gesture_frame_count += 1
+                        last_gesture_time = time.time()
+                    else:
+                        if time.time() - last_gesture_time > GESTURE_GRACE_PERIOD:
+                            gesture_frame_count = 0
 
-            # 3) Wrists at similar height (relaxed)
-            wrists_close_vertically = abs(left_wrist.y - right_wrist.y) < 0.20
+                    if gesture_frame_count >= GESTURE_MIN_FRAMES:
+                        gesture_detected = True
+                        cv2.putText(frame, "SOS GESTURE DETECTED",
+                                    (50, 50), cv2.FONT_HERSHEY_SIMPLEX,
+                                    1, (0, 0, 255), 2)
+                    elif raw_detection:
+                        cv2.putText(frame, "HOLD STEADY...",
+                                    (50, 50), cv2.FONT_HERSHEY_SIMPLEX,
+                                    0.7, (0, 255, 255), 2)
+                    elif wrists_raised:
+                        cv2.putText(frame, "CROSS ARMS TO SIGNAL SOS",
+                                    (50, 50), cv2.FONT_HERSHEY_SIMPLEX,
+                                    0.6, (0, 200, 200), 1)
+            except Exception as pose_err:
+                print(f"Pose detection error (continuing): {pose_err}")
 
-            # 4) Wrists near body center (relaxed)
-            body_center_x = (left_shoulder.x + right_shoulder.x) / 2
-            wrists_near_center = (
-                abs(left_wrist.x - body_center_x) < 0.35 and
-                abs(right_wrist.x - body_center_x) < 0.35
-            )
+            # --- HOLD TIMER ---
+            current_time = time.time()
 
-            raw_detection = (
-                wrists_crossed and
-                wrists_raised and
-                wrists_close_vertically and
-                wrists_near_center
-            )
+            if sos_triggered and (current_time - last_sos_time) > SOS_COOLDOWN:
+                sos_triggered = False
+                add_log("SOS cooldown reset — monitoring resumed", "info")
 
-            if raw_detection:
-                gesture_frame_count += 1
-                last_gesture_time = time.time()
+            if gesture_detected:
+                if gesture_start_time is None:
+                    gesture_start_time = current_time
+                    add_log("SOS gesture confirmed — hold for 5 seconds", "warning")
+
+                elapsed = current_time - gesture_start_time
+                remaining = int(HOLD_DURATION - elapsed)
+
+                if remaining > 0:
+                    cv2.putText(frame, f"Hold {remaining} sec",
+                                (50, 90), cv2.FONT_HERSHEY_SIMPLEX,
+                                1, (255, 255, 0), 2)
+
+                    bar_width = int((elapsed / HOLD_DURATION) * 300)
+                    cv2.rectangle(frame, (50, 110), (50 + bar_width, 125), (0, 255, 255), -1)
+                    cv2.rectangle(frame, (50, 110), (350, 125), (0, 255, 255), 1)
+
+                if elapsed >= HOLD_DURATION and not sos_triggered:
+                    print("🚨 Emergency Triggered")
+                    try:
+                        trigger_alert(frame)
+                    except Exception as alert_err:
+                        print(f"Alert trigger error (camera continues): {alert_err}")
+                        add_log(f"Alert error: {str(alert_err)[:50]}", "alert")
+                    sos_triggered = True
+                    last_sos_time = time.time()
+
             else:
-                # Grace period: don't reset immediately on a single dropped frame
-                if time.time() - last_gesture_time > GESTURE_GRACE_PERIOD:
-                    gesture_frame_count = 0
+                if gesture_start_time is not None:
+                    gesture_start_time = None
 
-            # Confirmed after enough consecutive frames
-            if gesture_frame_count >= GESTURE_MIN_FRAMES:
-                gesture_detected = True
-                cv2.putText(frame, "SOS GESTURE DETECTED",
-                            (50, 50), cv2.FONT_HERSHEY_SIMPLEX,
-                            1, (0, 0, 255), 2)
-            elif raw_detection:
-                # Show early feedback
-                cv2.putText(frame, "HOLD STEADY...",
-                            (50, 50), cv2.FONT_HERSHEY_SIMPLEX,
-                            0.7, (0, 255, 255), 2)
-            elif wrists_raised:
-                cv2.putText(frame, "CROSS ARMS TO SIGNAL SOS",
-                            (50, 50), cv2.FONT_HERSHEY_SIMPLEX,
-                            0.6, (0, 200, 200), 1)
+            # --- ENCODE AND YIELD ---
+            ret, buffer = cv2.imencode('.jpg', frame)
+            frame_bytes = buffer.tobytes()
 
-        # --- HOLD TIMER ---
-        current_time = time.time()
+            yield (b'--frame\r\n'
+                   b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
 
-        # Reset sos_triggered after cooldown
-        if sos_triggered and (current_time - last_sos_time) > SOS_COOLDOWN:
-            sos_triggered = False
-            add_log("SOS cooldown reset — monitoring resumed", "info")
-
-        if gesture_detected:
-            if gesture_start_time is None:
-                gesture_start_time = current_time
-                add_log("SOS gesture confirmed — hold for 5 seconds", "warning")
-
-            elapsed = current_time - gesture_start_time
-            remaining = int(HOLD_DURATION - elapsed)
-
-            if remaining > 0:
-                cv2.putText(frame, f"Hold {remaining} sec",
-                            (50, 90), cv2.FONT_HERSHEY_SIMPLEX,
-                            1, (255, 255, 0), 2)
-
-                # Draw progress bar
-                bar_width = int((elapsed / HOLD_DURATION) * 300)
-                cv2.rectangle(frame, (50, 110), (50 + bar_width, 125), (0, 255, 255), -1)
-                cv2.rectangle(frame, (50, 110), (350, 125), (0, 255, 255), 1)
-
-            if elapsed >= HOLD_DURATION and not sos_triggered:
-                print("🚨 Emergency Triggered")
-                trigger_alert(frame)
-                sos_triggered = True
-
-        else:
-            if gesture_start_time is not None:
-                gesture_start_time = None
-
-        # --- ENCODE AND YIELD ---
-        ret, buffer = cv2.imencode('.jpg', frame)
-        frame_bytes = buffer.tobytes()
-
-        yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+        except GeneratorExit:
+            cap.release()
+            break
+        except Exception as e:
+            print(f"Frame processing error (continuing): {e}")
+            continue
 
 
 @app.route("/video_feed")
@@ -622,6 +642,13 @@ def home():
         "status": "SafeSignal Backend Running"
     })
 
+@app.route("/test_alert")
+def test_alert():
+    import numpy as np
+    blank_image = np.zeros((480, 640, 3), dtype=np.uint8)
+    cv2.putText(blank_image, "TEST", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+    trigger_alert(blank_image)
+    return jsonify({"status": "Test alert triggered. Check console logs."})
 
 # ---------------------------
 # RUN SERVER
