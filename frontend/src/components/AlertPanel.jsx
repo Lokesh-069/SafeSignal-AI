@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import { API_URL } from '../config'
 
 const THREAT_LEVELS = [
     { label: 'LOW', color: 'var(--neon-green)', width: '25%', bg: 'linear-gradient(90deg, #39ff14, #00f0ff)' },
@@ -15,7 +14,7 @@ export default function AlertPanel() {
     // Poll /status every 3 seconds
     useEffect(() => {
         const fetchStatus = () => {
-            fetch(`${API_URL}/status`)
+            fetch("http://127.0.0.1:5001/status")
                 .then(res => res.json())
                 .then(data => {
                     setIsAlert(data.is_alert)

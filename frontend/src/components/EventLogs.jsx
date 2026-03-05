@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from 'react'
-import { API_URL } from '../config'
 
 const TYPE_COLORS = {
     info: 'var(--neon-cyan)',
@@ -22,7 +21,7 @@ export default function EventLogs() {
     // Poll /logs from backend every 3 seconds
     useEffect(() => {
         const fetchLogs = () => {
-            fetch(`${API_URL}/logs`)
+            fetch("http://127.0.0.1:5001/logs")
                 .then(res => res.json())
                 .then(data => {
                     if (Array.isArray(data)) {
@@ -35,7 +34,7 @@ export default function EventLogs() {
                         const now = new Date().toLocaleTimeString('en-US', { hour12: false })
                         setLogs([
                             { time: now, message: 'Waiting for backend connection...', type: 'warning' },
-                            { time: now, message: `Backend: ${API_URL}`, type: 'info' },
+                            { time: now, message: 'Backend: http://127.0.0.1:5001', type: 'info' },
                         ])
                     }
                 })
