@@ -3,6 +3,7 @@ import CameraPanel from '../components/CameraPanel'
 import MapPanel from '../components/MapPanel'
 import EvidencePanel from '../components/EvidencePanel'
 import AlertPanel from '../components/AlertPanel'
+import SOSButton from '../components/SOSButton'
 import EventLogs from '../components/EventLogs'
 
 export default function Dashboard() {
@@ -21,7 +22,7 @@ export default function Dashboard() {
                 padding: '20px 24px 32px',
                 display: 'grid',
                 gridTemplateColumns: 'repeat(2, 1fr)',
-                gridTemplateRows: 'auto auto auto',
+                gridTemplateRows: 'auto auto auto auto',
                 gap: '20px',
                 maxWidth: '1440px',
                 width: '100%',
@@ -35,7 +36,10 @@ export default function Dashboard() {
                 <EvidencePanel />
                 <AlertPanel />
 
-                {/* Row 3: Event Logs (full width) */}
+                {/* Row 3: Manual SOS Button (full width) */}
+                <SOSButton />
+
+                {/* Row 4: Event Logs (full width) */}
                 <div style={{ gridColumn: '1 / -1' }}>
                     <EventLogs />
                 </div>

@@ -480,7 +480,7 @@ def logs():
 
 
 # ---------------------------
-# TRIGGER ALERT ENDPOINT
+# TRIGGER ALERT ENDPOINT (from gesture detection)
 # ---------------------------
 
 @app.route("/trigger_alert", methods=["POST"])
@@ -488,6 +488,92 @@ def trigger_alert_endpoint():
     add_log("🚨 SOS GESTURE DETECTED", "alert")
     add_log("All alert channels notified", "success")
     return jsonify({"status": "alert_registered"})
+
+
+# ---------------------------
+# MANUAL SOS ENDPOINT
+# ---------------------------
+
+# Shared camera frame for manual SOS
+latest_frame = None
+frame_lock = threading.Lock()
+
+@app.route("/manual_sos", methods=["POST"])
+def manual_sos():
+    """Manual SOS button - captures current frame and triggers all alerts"""
+    global sos_triggered, last_sos_time
+
+    add_log("🚨 MANUAL SOS ACTIVATED", "alert")
+
+    # Try to capture a frame from the camera
+    frame_captured = False
+    try:
+        cap = cv2.VideoCapture(0)
+        if cap.isOpened():
+            ret, frame = cap.read()
+            if ret:
+                timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                filename = f"manual_sos_{timestamp}.jpg"
+                cv2.imwrite("latest.jpg", frame)
+                cv2.imwrite(filename, frame)
+                frame_captured = True
+                add_log("Evidence frame captured", "warning")
+
+                last_sos_time = time.time()
+                sos_triggered = True
+
+                # Send alerts in background
+                def send_manual_alerts():
+                    add_log("Uploading evidence to cloud...", "info")
+                    try:
+                        image_url = upload_image(filename)
+                        add_log("Evidence uploaded to Cloudinary", "success")
+                    except Exception as e:
+                        add_log(f"Upload failed: {str(e)[:50]}", "alert")
+                        return
+
+                    maps_link = get_location()
+
+                    add_log("Sending SMS alert...", "warning")
+                    send_sms(image_url, maps_link)
+
+                    add_log("Sending WhatsApp alert...", "warning")
+                    send_whatsapp(image_url, maps_link)
+
+                    add_log("Making emergency phone call...", "warning")
+                    make_call()
+
+                    add_log("Sending email alert...", "warning")
+                    send_email(image_url, maps_link)
+
+                    add_log("All alert channels notified ✅", "success")
+
+                threading.Thread(target=send_manual_alerts, daemon=True).start()
+
+            cap.release()
+    except Exception as e:
+        add_log(f"Camera capture failed: {str(e)[:50]}", "alert")
+
+    if not frame_captured:
+        add_log("No camera frame available — sending alerts without evidence", "warning")
+        last_sos_time = time.time()
+        sos_triggered = True
+
+        def send_no_frame_alerts():
+            maps_link = get_location()
+            add_log("Sending SMS alert...", "warning")
+            send_sms("No image available", maps_link)
+            add_log("Sending WhatsApp alert...", "warning")
+            send_whatsapp("No image available", maps_link)
+            add_log("Making emergency phone call...", "warning")
+            make_call()
+            add_log("Sending email alert...", "warning")
+            send_email("No image available", maps_link)
+            add_log("All alert channels notified ✅", "success")
+
+        threading.Thread(target=send_no_frame_alerts, daemon=True).start()
+
+    return jsonify({"status": "manual_sos_triggered", "evidence": frame_captured})
 
 
 # ---------------------------
